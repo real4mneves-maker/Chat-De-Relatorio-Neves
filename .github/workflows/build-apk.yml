@@ -1,0 +1,68 @@
+name: Gerar APK | Chat de Relatório Neves
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    name: Compilar APK Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Flutter estavel
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar arquivos Android que faltam
+        shell: bash
+        run: |
+          set -euo pipefail
+          # O ZIP original continha somente o AndroidManifest.xml,
+          # sem Gradle e os demais arquivos nativos do Android.
+          mkdir -p /tmp/neves-original
+          cp pubspec.yaml /tmp/neves-original/pubspec.yaml
+          cp android/app/src/main/AndroidManifest.xml /tmp/neves-original/AndroidManifest.xml
+          flutter create --platforms=android --org=br.com.neves --project-name=chat_de_relatorio_neves .
+          cp /tmp/neves-original/pubspec.yaml pubspec.yaml
+          cp /tmp/neves-original/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+
+      - name: Baixar dependencias
+        run: flutter pub get
+
+      - name: Executar testes
+        run: flutter test test/widget_test.dart
+
+      - name: Compilar APK instalavel
+        run: flutter build apk --release
+
+      - name: Conferir arquivo gerado
+        shell: bash
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Disponibilizar APK para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chat-de-Relatorio-Neves-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
